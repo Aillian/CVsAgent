@@ -1,0 +1,7 @@
+CVs/*.pdf
+!CVs/Ali\ Abuharb's\ CV.pdf
+!CVs/Deemah_Alabdulaali_Resume.pdf
+Notebooks
+resumegpt_venv
+ResumeGPT_Workflow/ResumeGPT_Workflow.pptx
+__pycache__
