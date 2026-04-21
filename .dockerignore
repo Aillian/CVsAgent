@@ -1,0 +1,46 @@
+# VCS
+.git
+.gitignore
+.github
+
+# Python build artefacts
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+venv
+env
+.pytest_cache
+.coverage
+htmlcov
+.mypy_cache
+.ruff_cache
+
+# Local user data — never bake into the image
+CVs/*.pdf
+CVs/*.docx
+CVs/*.doc
+Output/*.xlsx
+Output/*.csv
+Output/*.json
+Output/*.log
+.cvsagent_cache/
+.env
+.env.*
+!.env.example
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+*.swp
+
+# Test + docs artefacts we don't need inside the container
+tests
+docs/_build
+Notebooks
+
+# Dockerfile itself doesn't need to be copied into the image
+Dockerfile
+docker-compose.yml

@@ -1,107 +1,241 @@
-# 🕵️‍♂️ CVsAgent: The Ultimate CV Intelligence Tool 🚀
+# CVsAgent
 
-> **Extract insights, rate candidates, and simplify hiring with the power of AI!** ✨
+> AI-powered CV / resume intelligence — extract structured data from a stack
+> of PDF / DOCX résumés and export a clean spreadsheet in one command.
 
-**CVsAgent** (formerly ResumeGPT) is a next-gen tool that transforms PDF CVs into structured, actionable data. Powered by LangChain and OpenAI, it helps HR professionals and recruiters extract 23+ data points, rate candidates, and export everything to Excel – all in seconds! ⏱️
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](#requirements)
+[![Made with LangChain](https://img.shields.io/badge/built%20with-LangChain-2ea44f)](https://langchain.com)
 
----
+CVsAgent turns a folder of résumés into a single tabular report: names,
+contact details, education, work history, skills, certifications, and a
+0–10 candidate rating — plus any custom fields you define and an optional
+match score against a specific job description.
 
-## 🌟 Features
-
-| 🧠 **Intelligent Extraction** | 📊 **Structured Output** | ⚡ **Batch Processing** |
-|-----------------------------|------------------------|---------------------|
-| Uses advanced LLMs (`gpt-5-mini` etc.) to understand context. | Exports strictly typed data to Excel. | Process hundreds of CVs in parallel. |
-
-| 🎨 **Beautiful UI** | 🐳 **Docker Ready** | 🔍 **Dynamic Analysis** |
-|-------------------|-------------------|---------------------|
-| Rich CLI with spinners & logging. | Run anywhere with zero setup. | **Target Job Matching** & **Custom Fields**. |
+![Workflow](assets/cvs_agent_workflow.png)
 
 ---
 
-## 🛠️ Installation
+## Features
 
-### Option 1: Docker (Recommended 🐳)
-Run the entire pipeline in a container without worrying about Python versions.
+- **24+ structured fields** per candidate (identity, education, work history, skills, projects, certs, languages, rating).
+- **PDF and DOCX** input, with an optional **OCR fallback** for scanned PDFs.
+- **Custom fields** — extract anything extra with `--add-fields VisaStatus DriverLicense …`.
+- **Job-description matching** — pass a JD and get a suitability flag + reason per candidate.
+- **Multiple output formats**: `xlsx`, `csv`, `json`. Timestamped filenames by default.
+- **Pluggable LLM backend** — OpenAI by default, or fully local via [Ollama](https://ollama.com).
+- **Pre-run cost estimate** and interactive **PII warning** before data leaves your machine.
+- **Content-hash cache** — re-running skips files that were already processed.
+- **Retry with exponential backoff** on transient LLM failures; partial results are streamed to disk so a crash never loses work.
+- **Rich progress bar** with ETA.
+- **Docker-ready** multi-stage image with a non-root user and a UI target wired up for a future web interface.
+
+---
+
+## Requirements
+
+- Python **3.10+**
+- An **OpenAI API key** (or a local Ollama server — see [Local models](#local-models))
+- Optional: `tesseract` + `poppler` on PATH if you want OCR for scanned PDFs
+
+---
+
+## Installation
+
+### Option 1 — Local
 
 ```bash
-# Build and Run
-docker-compose up --build
+git clone https://github.com/Aillian/CVsAgent.git
+cd CVsAgent
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env   # then edit .env and add your OPENAI_API_KEY
 ```
 
-### Option 2: Local Setup 💻
+### Option 2 — Docker
 
-1. **Clone & Install**
-   ```bash
-   git clone https://github.com/your-repo/CVsAgent.git
-   cd CVsAgent
-   pip install -r requirements.txt
-   ```
+```bash
+cp .env.example .env   # add your OPENAI_API_KEY
+docker compose build
+docker compose run --rm cli --help
+```
 
-2. **Setup Environment**
-   Create a `.env` file in the root directory:
-   ```env
-   OPENAI_API_KEY=sk-your-api-key-here
-   ```
+Your host's `CVs/` and `Output/` folders are mounted into the container, so
+files you drop into `./CVs/` show up inside the container automatically.
 
 ---
 
-## 🚀 Usage
+## Usage
 
-Place your PDF CVs in the `CVs` directory.
+Drop your résumés into `CVs/` (PDF or DOCX), then run:
 
-### Quick Start
 ```bash
-python main.py
+python main.py --yes
 ```
 
-### 🎯 Dynamic & Advanced Usage
+The first run prints a cost estimate and asks for confirmation before sending
+any data to OpenAI. The `--yes` flag skips those prompts — omit it for an
+interactive run.
 
-**1. Custom Fields Extraction**:
-Extract additional specific info like Visa Status or Driver's License.
+### Common recipes
+
 ```bash
-python main.py --add_fields "VisaStatus" "DriverLicense"
+# Match every CV against a specific job description
+python main.py --job-description-file job_descriptions/job_description.txt
+
+# Add custom fields to the output
+python main.py --add-fields VisaStatus DriverLicense GitHubStars
+
+# Switch output format
+python main.py --format csv
+python main.py --format json --output-file results.json
+
+# Use a local model instead of OpenAI (requires `pip install langchain-ollama`
+# and a running Ollama server)
+python main.py --provider ollama --model llama3.1
+
+# Preview what would run — loads CVs and prints a cost estimate but never
+# calls the LLM
+python main.py --dry-run --yes
+
+# Start from scratch (clear the cache of previously-processed CVs)
+python main.py --clear-cache --no-cache
 ```
 
-**2. Target Job Matching**:
-Rate candidates against a specific job description (text or file).
-```bash
-python main.py --job_description_file "job_descriptions/job_description.txt"
-# OR
-python main.py --job_description "Seeking a Senior Python Developer with AWS experience..."
-```
+### All CLI flags
 
-**3. Full Customization**:
-```bash
-python main.py --cv_dir "My_CVs" --output_dir "Results" --model "gpt-4o" --add_fields "GitHubStars"
-```
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--cv-dir` | `CVs` | Directory containing the input PDF/DOCX files. |
+| `--output-dir` | `Output` | Directory for the generated report. |
+| `--output-file` | *auto* | Explicit output filename (overrides auto-timestamped name). |
+| `--format` | `xlsx` | Output format: `xlsx`, `csv`, or `json`. |
+| `--provider` | `openai` | LLM provider: `openai` or `ollama`. |
+| `--model` | `gpt-5-mini-2025-08-07` | Model name (default depends on provider). |
+| `--api-key` | — | API key (prefer `OPENAI_API_KEY` in `.env`). |
+| `--ollama-base-url` | `http://localhost:11434` | Ollama server URL. |
+| `--rate-limit-rps` | `0.5` | OpenAI rate limit in requests per second. |
+| `--add-fields` | — | Extra fields to extract, space-separated. |
+| `--job-description` | — | Job description text to match candidates against. |
+| `--job-description-file` | — | Path to a text file with the job description. |
+| `--no-cache` | *off* | Disable the on-disk extraction cache. |
+| `--clear-cache` | *off* | Clear the cache before running. |
+| `--cache-dir` | `.cvsagent_cache` | Cache directory. |
+| `--ocr` | *off* | Run OCR on PDFs that yield no text. |
+| `--dry-run` | *off* | Load + cost-estimate only, no LLM calls. |
+| `--yes`, `-y` | *off* | Skip all interactive prompts. |
+| `--verbose`, `-v` | *off* | Debug-level logging. |
+| `--log-file` | — | Mirror logs to a file. |
+| `--version` | — | Print version and exit. |
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--cv_dir` | `CVs` | Folder containing input PDFs. |
-| `--output_dir` | `Output` | Folder for the Excel report. |
-| `--model` | `gpt-5-mini-2025-08-07` | OpenAI model to use. |
-| `--add_fields` | `None` | List of custom fields to extract. |
-| `--job_description_file` | `None` | Path to job description text file. |
-| `--job_description` | `None` | Job description string. |
+### Environment variables
+
+All of these are optional — the CLI flags take precedence.
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY` | Required for the OpenAI provider. |
+| `CVSAGENT_PROVIDER` | `openai` or `ollama`. |
+| `CVSAGENT_MODEL` | Default model name. |
+| `OLLAMA_BASE_URL` | Ollama server URL. |
+| `CVSAGENT_RATE_LIMIT_RPS` | OpenAI rate limit (requests/sec). |
+| `CVSAGENT_CV_DIR` | Default input directory. |
+| `CVSAGENT_OUTPUT_DIR` | Default output directory. |
+| `CVSAGENT_CACHE_DIR` | Default cache directory. |
 
 ---
 
-## 📊 Extracted Data
+## Extracted fields
 
-The tool extracts **23+ default features** plus any custom fields you define:
+Per candidate you get:
 
-- **🎓 Education**: University, Major, GPA, Graduation Date (Bachelor, Masters, PhD).
-- **💼 Experience**: Companies, Titles, Top Responsibilities, Dates.
-- **🛠️ Skills**: Top 5 Technical & Soft Skills.
-- **📜 Certifications & Awards**: Top 5 Achievements.
-- **🌍 Personal**: Nationality, Residence, Employment Status, Portfolio URLs.
-- **📈 Analysis**: Top 5 Suitable Positions, Candidate Rating (0-10).
-- **🎯 Job Match**: Suitability (True/False) and Reasoning (if job provided).
+- **Identity & contact** — Full Name, Email, Phone, LinkedIn URL, Portfolio URLs, City, Country
+- **Professional summary** (≤100 words)
+- **Education** — University, degree, major, GPA, graduation date (per degree)
+- **Work experience** — Companies, job titles, current-role flag, top responsibilities
+- **Computed** — Years of experience, management level
+- **Skills** — Top 5 technical, top 5 soft, languages + proficiency
+- **Achievements** — Top 5 projects, certifications, awards
+- **Analysis** — Nationality, employment status, top 5 suitable positions, overall rating (0–10)
+- **Dynamic** — your `--add-fields` plus optional `Target Role Match` + `Match Reason` when you supply a job description
+
+---
+
+## Local models
+
+CVsAgent works end-to-end without ever leaving your machine:
+
+```bash
+# 1. Run Ollama and pull a model
+ollama run llama3.1
+
+# 2. Install the provider bridge
+pip install langchain-ollama
+
+# 3. Point CVsAgent at it
+python main.py --provider ollama --model llama3.1
+```
+
+No API key is required and no CV content is transmitted to a third party.
 
 ---
 
-## 🤝 Contributing
-Feel free to open issues or submit PRs! Let's make hiring smarter together. 💡
+## Running tests
+
+The test suite drives the real CLI end-to-end with a mock LLM — no network
+calls, no API key needed.
+
+```bash
+pip install pytest python-docx
+pytest -q
+```
 
 ---
-*Built with ❤️ using [LangChain](https://langchain.com) and [Rich](https://github.com/Textualize/rich)*
+
+## Project layout
+
+```
+.
+├── main.py                       # thin CLI entrypoint
+├── cvs_agent/                    # core package
+│   ├── app.py                    # CLI + orchestration
+│   ├── config.py                 # constants, RunConfig
+│   ├── console.py                # shared Rich logger
+│   ├── loader.py                 # PDF + DOCX (+ optional OCR)
+│   ├── pipeline.py               # LangChain agent (OpenAI / Ollama)
+│   ├── prompts.py                # system prompt builder
+│   ├── schema.py                 # Pydantic CVData model
+│   ├── mapper.py                 # nested dict -> flat row
+│   ├── exporter.py               # xlsx / csv / json writers
+│   ├── cache.py                  # SHA-256 keyed result cache
+│   └── utils.py
+├── tests/                        # end-to-end CLI integration tests
+├── assets/                       # docs images
+├── job_descriptions/             # sample JD
+├── Dockerfile                    # multi-stage, UI-ready
+├── docker-compose.yml            # cli + future ui profile
+└── requirements.txt
+```
+
+---
+
+## Roadmap
+
+- Web UI (in `Dockerfile` stage `ui`, `docker-compose.yml` profile `ui`) — planned after the current hardening cycle.
+- Google Drive / S3 input sources.
+- Diff view between runs.
+- Fine-grained per-field confidence scores.
+
+---
+
+## Contributing
+
+Contributions are welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Security issues: see
+[SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © Ali Abuharb
+
+Built with [LangChain](https://langchain.com), [Pydantic](https://docs.pydantic.dev/), and [Rich](https://github.com/Textualize/rich).

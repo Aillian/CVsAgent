@@ -1,34 +1,72 @@
-import os
+"""Write flattened CV rows to disk in XLSX / CSV / JSON formats."""
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
-from typing import List, Dict, Any
+
+from .config import DEFAULT_OUTPUT_FORMAT, DEFAULT_OUTPUT_STEM, OUTPUT_FORMATS
 from .console import console
 
-def save_results(results: List[Dict[str, Any]], output_dir: str):
-    """
-    Saves the extracted results to an Excel file.
-    
-    Args:
-        results: List of dictionaries containing the flattened CV data.
-        output_dir: Directory to save the output file.
+
+def _resolve_output_path(
+    output_dir: Path,
+    fmt: str,
+    output_file: Optional[Path] = None,
+) -> Path:
+    """Build the full output path. Honours an explicit filename if provided."""
+    if output_file is not None:
+        output_file = Path(output_file)
+        if output_file.is_absolute():
+            return output_file
+        return output_dir / output_file
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return output_dir / f"{DEFAULT_OUTPUT_STEM}_{timestamp}.{fmt}"
+
+
+def save_results(
+    results: List[Dict[str, Any]],
+    output_dir: Path,
+    output_format: str = DEFAULT_OUTPUT_FORMAT,
+    output_file: Optional[Path] = None,
+) -> Optional[Path]:
+    """Persist ``results`` to ``output_dir`` in the requested format.
+
+    Returns the absolute output path on success, or ``None`` if nothing was written.
     """
     if not results:
-        console.log("Exporter", "No results to save.", style="yellow")
-        return
+        console.warn("Exporter", "No results to save.")
+        return None
+
+    fmt = output_format.lower()
+    if fmt not in OUTPUT_FORMATS:
+        console.error(
+            "Exporter",
+            f"Unsupported format '{output_format}'. Supported: {', '.join(OUTPUT_FORMATS)}",
+        )
+        return None
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = _resolve_output_path(output_dir, fmt, output_file)
 
     try:
-        # Create DataFrame
-        df = pd.DataFrame(results)
-        
-        # Ensure output directory exists
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Define output path
-        output_path = os.path.join(output_dir, "CVs_Info_Extracted.xlsx")
-        
-        # Save to Excel
-        df.to_excel(output_path, index=False)
-        
-        console.log("Exporter", f"Results successfully saved to [bold]{output_path}[/bold]", style="green")
-        
-    except Exception as e:
-        console.log("Exporter", f"Failed to save results: {e}", style="bold red")
+        if fmt == "xlsx":
+            pd.DataFrame(results).to_excel(path, index=False)
+        elif fmt == "csv":
+            pd.DataFrame(results).to_csv(path, index=False, encoding="utf-8-sig")
+        elif fmt == "json":
+            path.write_text(
+                json.dumps(results, indent=2, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+    except Exception as exc:  # noqa: BLE001
+        console.error("Exporter", f"Failed to save results: {exc}")
+        return None
+
+    console.log("Exporter", f"Results saved to [bold]{path}[/bold]", style="green")
+    return path

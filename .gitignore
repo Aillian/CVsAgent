@@ -1,7 +1,38 @@
+# --- Secrets / environment ---
 .env
+.env.*
+!.env.example
+
+# --- User data (never commit real CVs or extraction output) ---
 CVs/*.pdf
-!CVs/Ali\ Abuharb's\ CV.pdf
-output/*.xlsx
-Notebooks
-venv
-__pycache__
+CVs/*.docx
+CVs/*.doc
+Output/*.xlsx
+Output/*.csv
+Output/*.json
+Output/*.log
+.cvsagent_cache/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- OS / IDE ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Notebooks ---
+Notebooks/
+*.ipynb_checkpoints/

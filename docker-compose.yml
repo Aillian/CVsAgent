@@ -1,8 +1,61 @@
+# =============================================================================
+# CVsAgent – docker-compose
+#
+# Default:
+#   docker compose run --rm cli --help
+#   docker compose run --rm cli --cv-dir /data/CVs --format xlsx
+#
+# Future UI (placeholder wired up now so it's ready to enable):
+#   docker compose --profile ui up
+# =============================================================================
+
 services:
-  cvs_agent:
-    build: .
-    volumes:
-      - ./CVs:/app/CVs
-      - ./Output:/app/Output
+  cli:
+    build:
+      context: .
+      target: cli
+    image: cvsagent:cli
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CVSAGENT_CV_DIR=/data/CVs
+      - CVSAGENT_OUTPUT_DIR=/data/Output
+      - CVSAGENT_CACHE_DIR=/data/.cvsagent_cache
+    volumes:
+      - ./CVs:/data/CVs
+      - ./Output:/data/Output
+      - cvsagent_cache:/data/.cvsagent_cache
+    # stdin_open + tty keep the Rich progress bar pretty when using `run`.
+    stdin_open: true
+    tty: true
+
+  # ---------------------------------------------------------------------------
+  # Future web UI — not yet implemented. Left here so that adding the UI
+  # only needs code + deps changes, not compose changes.
+  # Launch once ready with:  docker compose --profile ui up
+  # ---------------------------------------------------------------------------
+  ui:
+    profiles: ["ui"]
+    build:
+      context: .
+      target: ui
+    image: cvsagent:ui
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - CVSAGENT_CV_DIR=/data/CVs
+      - CVSAGENT_OUTPUT_DIR=/data/Output
+      - CVSAGENT_CACHE_DIR=/data/.cvsagent_cache
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./CVs:/data/CVs
+      - ./Output:/data/Output
+      - cvsagent_cache:/data/.cvsagent_cache
+    depends_on:
+      - cli
+
+volumes:
+  cvsagent_cache:
