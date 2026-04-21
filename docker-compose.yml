@@ -1,0 +1,8 @@
+services:
+  cvs_agent:
+    build: .
+    volumes:
+      - ./CVs:/app/CVs
+      - ./Output:/app/Output
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}

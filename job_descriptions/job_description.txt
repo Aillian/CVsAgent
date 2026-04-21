@@ -1,0 +1,7 @@
+We are looking for a Senior Python Developer with experience in AI and Machine Learning.
+Detailed responsibilities:
+- Build RAG pipelines using LangChain and OpenAI.
+- Optimize backend performance.
+- Mentor junior engineers.
+- Familiarity with Docker and Cloud deployment.
+Looking for someone with 5+ years of experience and strong problem-solving skills.

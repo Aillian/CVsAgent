@@ -1,7 +1,7 @@
+.env
 CVs/*.pdf
 !CVs/Ali\ Abuharb's\ CV.pdf
-!CVs/Deemah_Alabdulaali_Resume.pdf
+output/*.xlsx
 Notebooks
-resumegpt_venv
-ResumeGPT_Workflow/ResumeGPT_Workflow.pptx
+venv
 __pycache__
