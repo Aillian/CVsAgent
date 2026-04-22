@@ -23,7 +23,7 @@ pre-release internal version.
 - Partial results are streamed to `Output/.partial.jsonl` so a crash never
   discards completed work.
 - Retry with exponential backoff on LLM failures (via `tenacity`).
-- `--dry-run`, `--verbose`, `--log-file`, `--clear-cache`, `--yes` CLI flags.
+- `--dry-run`, `--verbose`, `--log-file`, `--clear-cache`, `--skip-prompts` CLI flags.
 - Multi-stage `Dockerfile` (builder → base → cli → ui) with a non-root user and
   a UI target wired up for a future web interface.
 - Integration test suite that invokes `python main.py` end-to-end with mocked

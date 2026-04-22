@@ -16,19 +16,37 @@ match score against a specific job description.
 
 ---
 
+## Quick Start
+
+```bash
+git clone https://github.com/Aillian/CVsAgent.git && cd CVsAgent
+pip install -r requirements.txt && cp .env.example .env  # add OPENAI_API_KEY
+python main.py --skip-prompts
+```
+
+---
+
+## Why CVsAgent?
+
+- **No manual copy-paste** — drop in thousands of CVs, get one clean spreadsheet in minutes instead of hours.
+- **Privacy-first** — run fully offline with Ollama; no candidate data ever has to leave your machine.
+- **Extensible** — add any custom field with a single flag; no code changes needed.
+
+---
+
 ## Features
 
-- **24+ structured fields** per candidate (identity, education, work history, skills, projects, certs, languages, rating).
-- **PDF and DOCX** input, with an optional **OCR fallback** for scanned PDFs.
-- **Custom fields** — extract anything extra with `--add-fields VisaStatus DriverLicense …`.
-- **Job-description matching** — pass a JD and get a suitability flag + reason per candidate.
-- **Multiple output formats**: `xlsx`, `csv`, `json`. Timestamped filenames by default.
-- **Pluggable LLM backend** — OpenAI by default, or fully local via [Ollama](https://ollama.com).
-- **Pre-run cost estimate** and interactive **PII warning** before data leaves your machine.
-- **Content-hash cache** — re-running skips files that were already processed.
-- **Retry with exponential backoff** on transient LLM failures; partial results are streamed to disk so a crash never loses work.
-- **Rich progress bar** with ETA.
-- **Docker-ready** multi-stage image with a non-root user and a UI target wired up for a future web interface.
+- 📋 **24+ structured fields** per candidate (identity, education, work history, skills, projects, certs, languages, rating).
+- 📄 **PDF and DOCX** input, with an optional **OCR fallback** for scanned PDFs.
+- ➕ **Custom fields** — extract anything extra with `--add-fields VisaStatus DriverLicense …`.
+- 🎯 **Job-description matching** — pass a JD and get a suitability flag + reason per candidate.
+- 📊 **Multiple output formats**: `xlsx`, `csv`, `json`. Timestamped filenames by default.
+- 🧠 **Pluggable LLM backend** — OpenAI by default, or fully local via [Ollama](https://ollama.com).
+- 🔒 **Pre-run cost estimate** and interactive **PII warning** before data leaves your machine.
+- ⚡ **Content-hash cache** — re-running skips files that were already processed.
+- 🔄 **Retry with exponential backoff** on transient LLM failures; partial results are streamed to disk so a crash never loses work.
+- 📈 **Rich progress bar** with ETA.
+- 🐳 **Docker-ready** multi-stage image with a non-root user and a UI target wired up for a future web interface.
 
 ---
 
@@ -70,11 +88,11 @@ files you drop into `./CVs/` show up inside the container automatically.
 Drop your résumés into `CVs/` (PDF or DOCX), then run:
 
 ```bash
-python main.py --yes
+python main.py --skip-prompts
 ```
 
 The first run prints a cost estimate and asks for confirmation before sending
-any data to OpenAI. The `--yes` flag skips those prompts — omit it for an
+any data to OpenAI. The `--skip-prompts` flag skips those prompts — omit it for an
 interactive run.
 
 ### Common recipes
@@ -96,7 +114,7 @@ python main.py --provider ollama --model llama3.1
 
 # Preview what would run — loads CVs and prints a cost estimate but never
 # calls the LLM
-python main.py --dry-run --yes
+python main.py --dry-run --skip-prompts
 
 # Start from scratch (clear the cache of previously-processed CVs)
 python main.py --clear-cache --no-cache
@@ -123,7 +141,7 @@ python main.py --clear-cache --no-cache
 | `--cache-dir` | `.cvsagent_cache` | Cache directory. |
 | `--ocr` | *off* | Run OCR on PDFs that yield no text. |
 | `--dry-run` | *off* | Load + cost-estimate only, no LLM calls. |
-| `--yes`, `-y` | *off* | Skip all interactive prompts. |
+| `--skip-prompts`, `-s` | *off* | Skip all interactive prompts. |
 | `--verbose`, `-v` | *off* | Debug-level logging. |
 | `--log-file` | — | Mirror logs to a file. |
 | `--version` | — | Print version and exit. |
@@ -222,20 +240,16 @@ pytest -q
 ## Roadmap
 
 - Web UI (in `Dockerfile` stage `ui`, `docker-compose.yml` profile `ui`) — planned after the current hardening cycle.
-- Google Drive / S3 input sources.
-- Diff view between runs.
-- Fine-grained per-field confidence scores.
 
 ---
 
 ## Contributing
 
-Contributions are welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) and
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Security issues: see
+Contributions are welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: see
 [SECURITY.md](SECURITY.md).
 
 ## License
 
 [MIT](LICENSE) © Ali Abuharb
 
-Built with [LangChain](https://langchain.com), [Pydantic](https://docs.pydantic.dev/), and [Rich](https://github.com/Textualize/rich).
+Created With 💜 By **Ali Abuharb**. Let's Connect on [LinkedIn](https://www.linkedin.com/in/ali-abuharb-3b4905153)

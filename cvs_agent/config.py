@@ -76,4 +76,4 @@ class RunConfig:
     dry_run: bool = False
     verbose: bool = False
     log_file: Optional[Path] = None
-    yes: bool = False  # skip interactive confirmations
+    skip_prompts: bool = False  # skip interactive confirmations

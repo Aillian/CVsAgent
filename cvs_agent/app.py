@@ -115,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     # --- UX ---
     parser.add_argument("--dry-run", action="store_true",
                         help="Load documents and print a cost estimate without calling the LLM.")
-    parser.add_argument("--yes", "-y", action="store_true",
+    parser.add_argument("--skip-prompts", "-s", action="store_true",
                         help="Skip all interactive prompts (accept defaults).")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Enable debug-level logging.")
@@ -190,7 +190,7 @@ def args_to_config(args: argparse.Namespace) -> Optional[RunConfig]:
         dry_run=args.dry_run,
         verbose=args.verbose,
         log_file=Path(args.log_file) if args.log_file else None,
-        yes=args.yes,
+        skip_prompts=args.skip_prompts,
     )
 
 
@@ -201,7 +201,7 @@ def _pii_warning(cfg: RunConfig) -> bool:
     """Warn the user about sending PII to a 3rd party. Returns True to continue."""
     if cfg.provider == PROVIDER_OLLAMA:
         return True  # local model — no external transmission
-    if cfg.yes:
+    if cfg.skip_prompts:
         return True
     return console.confirm(
         "CV contents will be sent to OpenAI for processing. Continue?",
@@ -239,7 +239,7 @@ def run(cfg: RunConfig) -> int:
         console.warn("Loader", "No CVs found to process.")
         return 1
 
-    if len(documents) > MAX_CV_COUNT_WARN and not cfg.yes:
+    if len(documents) > MAX_CV_COUNT_WARN and not cfg.skip_prompts:
         if not console.confirm(
             f"About to process {len(documents)} CVs — continue?", default=True
         ):
