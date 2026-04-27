@@ -7,10 +7,10 @@
 CVs/*.pdf
 CVs/*.docx
 CVs/*.doc
-Output/*.xlsx
-Output/*.csv
-Output/*.json
-Output/*.log
+output/*.xlsx
+output/*.csv
+output/*.json
+output/*.log
 .cvsagent_cache/
 
 # --- Python ---

@@ -52,7 +52,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:${PATH}" \
     CVSAGENT_CV_DIR=/data/CVs \
-    CVSAGENT_OUTPUT_DIR=/data/Output \
+    CVSAGENT_OUTPUT_DIR=/data/output \
     CVSAGENT_CACHE_DIR=/data/.cvsagent_cache
 
 # Runtime OS deps: poppler + tesseract are optional (OCR). Keeping them thin
@@ -64,7 +64,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system ${APP_USER} \
  && useradd --system --gid ${APP_USER} --create-home --home-dir /home/${APP_USER} ${APP_USER} \
- && mkdir -p ${APP_HOME} /data/CVs /data/Output /data/.cvsagent_cache \
+ && mkdir -p ${APP_HOME} /data/CVs /data/output /data/.cvsagent_cache \
  && chown -R ${APP_USER}:${APP_USER} ${APP_HOME} /data
 
 COPY --from=builder /opt/venv /opt/venv

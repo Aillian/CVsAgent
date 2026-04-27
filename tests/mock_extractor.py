@@ -1,9 +1,9 @@
 """Deterministic drop-in replacement for ``CVExtractor`` used by tests.
 
 The real CVExtractor talks to OpenAI / Ollama. Here we expose a class with the
-same constructor signature and ``extract`` / ``estimate_cost`` methods, but
-that returns canned data keyed off the CV text so each test fixture produces
-predictable rows.
+same constructor signature and ``extract`` / ``extract_batch`` /
+``estimate_cost`` methods, but that returns canned data keyed off the CV text
+so each test fixture produces predictable rows.
 
 Tests activate it by setting::
 
@@ -14,6 +14,7 @@ without any further wiring.
 """
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional
 
 
@@ -132,11 +133,25 @@ class MockExtractor:
         self.job_description = job_description
 
     def extract(self, text: str) -> Dict[str, Any]:
+        if os.getenv("CVSAGENT_FAIL_ON_EXTRACT"):
+            raise AssertionError("extract() should not be used by batch mode")
         return _canned_result(
             text=text,
             custom_fields=self.custom_fields,
             with_target_match=bool(self.job_description),
         )
+
+    def extract_batch(self, texts: List[str], max_concurrency: int):
+        fail_index = os.getenv("CVSAGENT_MOCK_BATCH_FAIL_INDEX")
+        for index in reversed(range(len(texts))):
+            if fail_index is not None and index == int(fail_index):
+                yield index, {}
+                continue
+            yield index, _canned_result(
+                text=texts[index],
+                custom_fields=self.custom_fields,
+                with_target_match=bool(self.job_description),
+            )
 
     def estimate_cost(self, texts: List[str]) -> Optional[Dict[str, float]]:
         total = sum(len(t) for t in texts)

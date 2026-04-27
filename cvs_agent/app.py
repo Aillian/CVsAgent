@@ -7,10 +7,12 @@ from tests or a future UI layer without shelling out.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from rich.progress import (
@@ -26,6 +28,8 @@ from rich.progress import (
 from .cache import ExtractionCache
 from .config import (
     DEFAULT_CACHE_DIR,
+    DEFAULT_BATCH_WORKERS_OLLAMA,
+    DEFAULT_BATCH_WORKERS_OPENAI,
     DEFAULT_CV_DIR,
     DEFAULT_MODEL_OLLAMA,
     DEFAULT_MODEL_OPENAI,
@@ -46,6 +50,9 @@ from .loader import LoadedDocument, load_cvs
 from .mapper import flatten_cv
 from .pipeline import CVExtractor
 from .utils import file_sha256, mask_api_key
+
+
+CACHE_KEY_VERSION = "batch-v1"
 
 
 def _load_extractor_class():
@@ -93,6 +100,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Ollama server URL (default: http://localhost:11434).")
     parser.add_argument("--rate-limit-rps", type=float, default=DEFAULT_RATE_LIMIT_RPS,
                         help="OpenAI rate limit in requests/second.")
+    parser.add_argument("--batch-workers", type=int, default=None,
+                        help="Maximum concurrent LangChain batch extractions.")
 
     # --- Dynamic fields ---
     parser.add_argument("--add-fields", nargs="+", default=None,
@@ -146,6 +155,29 @@ def _resolve_model(provider: str, explicit: Optional[str]) -> str:
     return os.getenv("CVSAGENT_MODEL", DEFAULT_MODEL_OPENAI)
 
 
+def _resolve_batch_workers(provider: str, explicit: Optional[int]) -> Optional[int]:
+    raw: Optional[str | int] = explicit
+    if raw is None:
+        raw = os.getenv("CVSAGENT_BATCH_WORKERS")
+    if raw is None:
+        return (
+            DEFAULT_BATCH_WORKERS_OLLAMA
+            if provider == PROVIDER_OLLAMA
+            else DEFAULT_BATCH_WORKERS_OPENAI
+        )
+
+    try:
+        workers = int(raw)
+    except (TypeError, ValueError):
+        console.error("Config", "Batch workers must be a positive integer.")
+        return None
+
+    if workers < 1:
+        console.error("Config", "Batch workers must be at least 1.")
+        return None
+    return workers
+
+
 def _load_job_description(args: argparse.Namespace) -> Optional[str]:
     if args.job_description_file:
         try:
@@ -171,6 +203,9 @@ def args_to_config(args: argparse.Namespace) -> Optional[RunConfig]:
     job_desc = _load_job_description(args)
     if args.job_description_file and job_desc is None:
         return None  # error already logged
+    batch_workers = _resolve_batch_workers(provider, args.batch_workers)
+    if batch_workers is None:
+        return None
 
     return RunConfig(
         cv_dir=Path(args.cv_dir),
@@ -182,6 +217,7 @@ def args_to_config(args: argparse.Namespace) -> Optional[RunConfig]:
         api_key=api_key,
         ollama_base_url=args.ollama_base_url,
         rate_limit_rps=args.rate_limit_rps,
+        batch_workers=batch_workers,
         custom_fields=list(args.add_fields or []),
         job_description=job_desc,
         use_cache=not args.no_cache,
@@ -209,6 +245,26 @@ def _pii_warning(cfg: RunConfig) -> bool:
     )
 
 
+def _cache_key_for(doc: LoadedDocument, cfg: RunConfig) -> Optional[str]:
+    if not doc.sha256:
+        return None
+    job_description_hash = hashlib.sha256(
+        (cfg.job_description or "").encode("utf-8")
+    ).hexdigest()
+    payload = {
+        "version": CACHE_KEY_VERSION,
+        "provider": cfg.provider,
+        "model": cfg.model,
+        "custom_fields": cfg.custom_fields,
+        "job_description_hash": job_description_hash,
+        "target_match": bool(cfg.job_description),
+    }
+    signature = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
+    return f"{doc.sha256}_{signature}"
+
+
 def _print_run_banner(cfg: RunConfig) -> None:
     console.print_panel(
         f"[bold green]Starting CVsAgent[/bold green]\n"
@@ -217,6 +273,7 @@ def _print_run_banner(cfg: RunConfig) -> None:
         f"CVs: [cyan]{cfg.cv_dir}[/cyan]   "
         f"Output: [cyan]{cfg.output_dir}[/cyan] ({cfg.output_format})\n"
         f"Cache: [cyan]{'on' if cfg.use_cache else 'off'}[/cyan]   "
+        f"Batch workers: [cyan]{cfg.batch_workers}[/cyan]   "
         f"API key: [cyan]{mask_api_key(cfg.api_key)}[/cyan]"
     )
     if cfg.custom_fields:
@@ -271,7 +328,9 @@ def run(cfg: RunConfig) -> int:
         return 2
 
     # --- 4. Cost estimate + confirmation ---
-    to_process = [d for d in documents if cache.get(d.sha256) is None] if cfg.use_cache else list(documents)
+    to_process = [
+        d for d in documents if cache.get(_cache_key_for(d, cfg)) is None
+    ] if cfg.use_cache else list(documents)
     estimate = extractor.estimate_cost([d.text for d in to_process])
     if estimate:
         console.log(
@@ -294,11 +353,29 @@ def run(cfg: RunConfig) -> int:
         console.warn("Runner", "Aborted by user.")
         return 130
 
-    # --- 5. Extract (serial loop so we can report progress + persist partials) ---
-    results = []
+    # --- 5. Extract (cache hits immediately, cache misses via LangChain batch) ---
+    results_by_index: List[Optional[Dict[str, Any]]] = [None] * len(documents)
+    misses: List[tuple[int, LoadedDocument]] = []
     successful = cached = failed = 0
     incremental_path = cfg.output_dir / ".partial.jsonl"
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def record_row(index: int, doc: LoadedDocument, data: Dict[str, Any]) -> bool:
+        try:
+            row = flatten_cv(
+                filename=doc.filename,
+                data=data,
+                custom_fields=cfg.custom_fields,
+                include_target_match=bool(cfg.job_description),
+            )
+            results_by_index[index] = row
+            # Persist partial result so a crash later does not lose work.
+            with incremental_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row, default=str) + "\n")
+            return True
+        except Exception as exc:  # noqa: BLE001
+            console.error("Mapper", f"Error mapping {doc.filename}: {exc}")
+            return False
 
     with Progress(
         SpinnerColumn(),
@@ -312,41 +389,54 @@ def run(cfg: RunConfig) -> int:
     ) as progress:
         task_id = progress.add_task("Extracting", total=len(documents), name="starting")
 
-        for doc in documents:
+        for index, doc in enumerate(documents):
             progress.update(task_id, name=doc.filename)
-            data = cache.get(doc.sha256)
-            hit_cache = data is not None
-
-            if not hit_cache:
-                data = extractor.extract(doc.text)
-                if data:
-                    cache.set(doc.sha256, data)
-
-            if not data:
-                failed += 1
-                progress.advance(task_id)
+            cache_key = _cache_key_for(doc, cfg)
+            data = cache.get(cache_key)
+            if data is None:
+                misses.append((index, doc))
                 continue
 
-            try:
-                row = flatten_cv(
-                    filename=doc.filename,
-                    data=data,
-                    custom_fields=cfg.custom_fields,
-                    include_target_match=bool(cfg.job_description),
-                )
-                results.append(row)
-                if hit_cache:
-                    cached += 1
-                else:
-                    successful += 1
-                # Persist partial result so a crash later does not lose work.
-                with incremental_path.open("a", encoding="utf-8") as f:
-                    import json as _json
-                    f.write(_json.dumps(row, default=str) + "\n")
-            except Exception as exc:  # noqa: BLE001
-                console.error("Mapper", f"Error mapping {doc.filename}: {exc}")
+            if record_row(index, doc, data):
+                cached += 1
+            else:
                 failed += 1
             progress.advance(task_id)
+
+        if misses:
+            progress.update(task_id, name=f"{len(misses)} uncached CVs")
+            completed_batch_positions: set[int] = set()
+            texts = [doc.text for _, doc in misses]
+            try:
+                for batch_index, data in extractor.extract_batch(
+                    texts,
+                    max_concurrency=cfg.batch_workers,
+                ):
+                    completed_batch_positions.add(batch_index)
+                    index, doc = misses[batch_index]
+                    progress.update(task_id, name=doc.filename)
+
+                    if not data:
+                        failed += 1
+                        progress.advance(task_id)
+                        continue
+
+                    cache.set(_cache_key_for(doc, cfg), data)
+                    if record_row(index, doc, data):
+                        successful += 1
+                    else:
+                        failed += 1
+                    progress.advance(task_id)
+            except Exception as exc:  # noqa: BLE001
+                console.error("Pipeline", f"Batch extraction failed: {exc}")
+                for batch_index, (_, doc) in enumerate(misses):
+                    if batch_index in completed_batch_positions:
+                        continue
+                    progress.update(task_id, name=doc.filename)
+                    failed += 1
+                    progress.advance(task_id)
+
+    results = [row for row in results_by_index if row is not None]
 
     # --- 6. Save + report ---
     save_results(

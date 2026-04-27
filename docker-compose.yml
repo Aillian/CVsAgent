@@ -20,11 +20,11 @@ services:
         required: false
     environment:
       - CVSAGENT_CV_DIR=/data/CVs
-      - CVSAGENT_OUTPUT_DIR=/data/Output
+      - CVSAGENT_OUTPUT_DIR=/data/output
       - CVSAGENT_CACHE_DIR=/data/.cvsagent_cache
     volumes:
       - ./CVs:/data/CVs
-      - ./Output:/data/Output
+      - ./output:/data/output
       - cvsagent_cache:/data/.cvsagent_cache
     # stdin_open + tty keep the Rich progress bar pretty when using `run`.
     stdin_open: true
@@ -46,13 +46,13 @@ services:
         required: false
     environment:
       - CVSAGENT_CV_DIR=/data/CVs
-      - CVSAGENT_OUTPUT_DIR=/data/Output
+      - CVSAGENT_OUTPUT_DIR=/data/output
       - CVSAGENT_CACHE_DIR=/data/.cvsagent_cache
     ports:
       - "8501:8501"
     volumes:
       - ./CVs:/data/CVs
-      - ./Output:/data/Output
+      - ./output:/data/output
       - cvsagent_cache:/data/.cvsagent_cache
     depends_on:
       - cli

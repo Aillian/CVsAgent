@@ -36,7 +36,7 @@ pytest -q
   bare `print()`.
 - Add type hints for public functions.
 - Keep modules small and focused — see the existing layout in `cvs_agent/`.
-- Don't commit anything under `CVs/`, `Output/`, or `.cvsagent_cache/` — those
+- Don't commit anything under `CVs/`, `output/`, or `.cvsagent_cache/` — those
   are user data directories.
 
 ## Reporting bugs / requesting features

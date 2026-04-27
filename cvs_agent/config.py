@@ -14,7 +14,7 @@ from typing import List, Optional
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_CV_DIR = Path(os.getenv("CVSAGENT_CV_DIR", "CVs"))
-DEFAULT_OUTPUT_DIR = Path(os.getenv("CVSAGENT_OUTPUT_DIR", "Output"))
+DEFAULT_OUTPUT_DIR = Path(os.getenv("CVSAGENT_OUTPUT_DIR", "output"))
 DEFAULT_CACHE_DIR = Path(os.getenv("CVSAGENT_CACHE_DIR", ".cvsagent_cache"))
 
 # --- Providers & models --------------------------------------------------
@@ -46,6 +46,8 @@ MAX_CV_COUNT_WARN = 200                    # warn above this many files
 
 DEFAULT_RATE_LIMIT_RPS = float(os.getenv("CVSAGENT_RATE_LIMIT_RPS", "0.5"))
 DEFAULT_RATE_LIMIT_BUCKET = 10
+DEFAULT_BATCH_WORKERS_OPENAI = 4
+DEFAULT_BATCH_WORKERS_OLLAMA = 1
 RETRY_ATTEMPTS = 3
 RETRY_BASE_SECONDS = 2.0
 
@@ -65,6 +67,7 @@ class RunConfig:
     ollama_base_url: Optional[str] = None
 
     rate_limit_rps: float = DEFAULT_RATE_LIMIT_RPS
+    batch_workers: int = DEFAULT_BATCH_WORKERS_OPENAI
 
     custom_fields: List[str] = field(default_factory=list)
     job_description: Optional[str] = None

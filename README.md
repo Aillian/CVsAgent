@@ -78,7 +78,7 @@ docker compose build
 docker compose run --rm cli --help
 ```
 
-Your host's `CVs/` and `Output/` folders are mounted into the container, so
+Your host's `CVs/` and `output/` folders are mounted into the container, so
 files you drop into `./CVs/` show up inside the container automatically.
 
 ---
@@ -125,7 +125,7 @@ python main.py --clear-cache --no-cache
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--cv-dir` | `CVs` | Directory containing the input PDF/DOCX files. |
-| `--output-dir` | `Output` | Directory for the generated report. |
+| `--output-dir` | `output` | Directory for the generated report. |
 | `--output-file` | *auto* | Explicit output filename (overrides auto-timestamped name). |
 | `--format` | `xlsx` | Output format: `xlsx`, `csv`, or `json`. |
 | `--provider` | `openai` | LLM provider: `openai` or `ollama`. |
@@ -133,6 +133,7 @@ python main.py --clear-cache --no-cache
 | `--api-key` | — | API key (prefer `OPENAI_API_KEY` in `.env`). |
 | `--ollama-base-url` | `http://localhost:11434` | Ollama server URL. |
 | `--rate-limit-rps` | `0.5` | OpenAI rate limit in requests per second. |
+| `--batch-workers` | `4` OpenAI / `1` Ollama | Maximum concurrent LangChain batch extractions. |
 | `--add-fields` | — | Extra fields to extract, space-separated. |
 | `--job-description` | — | Job description text to match candidates against. |
 | `--job-description-file` | — | Path to a text file with the job description. |
@@ -157,6 +158,7 @@ All of these are optional — the CLI flags take precedence.
 | `CVSAGENT_MODEL` | Default model name. |
 | `OLLAMA_BASE_URL` | Ollama server URL. |
 | `CVSAGENT_RATE_LIMIT_RPS` | OpenAI rate limit (requests/sec). |
+| `CVSAGENT_BATCH_WORKERS` | Maximum concurrent LangChain batch extractions. |
 | `CVSAGENT_CV_DIR` | Default input directory. |
 | `CVSAGENT_OUTPUT_DIR` | Default output directory. |
 | `CVSAGENT_CACHE_DIR` | Default cache directory. |

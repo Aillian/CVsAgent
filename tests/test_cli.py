@@ -1,4 +1,4 @@
-"""End-to-end CLI tests — each invokes ``python main.py`` in a subprocess.
+﻿"""End-to-end CLI tests â€” each invokes ``python main.py`` in a subprocess.
 
 The mock extractor (selected via ``CVSAGENT_MOCK_EXTRACTOR``) means no network
 is needed; we exercise argument parsing, the loader, the cache, the mapper,
@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from cvs_agent.app import args_to_config, build_parser
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -40,12 +42,39 @@ def test_help_exits_zero(workspace, cli_env):
     assert result.returncode == 0, result.stderr
     assert "CVsAgent" in result.stdout
     assert "--format" in result.stdout
+    assert "--batch-workers" in result.stdout
 
 
 def test_version_flag(workspace, cli_env):
     result = run_cli(["--version"], env=cli_env, cwd=workspace)
     assert result.returncode == 0, result.stderr
     assert "CVsAgent" in result.stdout
+
+
+def test_batch_workers_flag(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-dummy")
+    args = build_parser().parse_args(["--batch-workers", "3"])
+    cfg = args_to_config(args)
+    assert cfg is not None
+    assert cfg.batch_workers == 3
+
+
+def test_batch_workers_env(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-dummy")
+    monkeypatch.setenv("CVSAGENT_BATCH_WORKERS", "6")
+    args = build_parser().parse_args([])
+    cfg = args_to_config(args)
+    assert cfg is not None
+    assert cfg.batch_workers == 6
+
+
+def test_ollama_batch_workers_default(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CVSAGENT_BATCH_WORKERS", raising=False)
+    args = build_parser().parse_args(["--provider", "ollama"])
+    cfg = args_to_config(args)
+    assert cfg is not None
+    assert cfg.batch_workers == 1
 
 
 def test_missing_api_key_fails_cleanly(workspace):
@@ -56,7 +85,7 @@ def test_missing_api_key_fails_cleanly(workspace):
     import os
     env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", r"C:\Windows")
     result = run_cli(
-        ["--cv-dir", str(workspace / "CVs"), "--output-dir", str(workspace / "Output")],
+        ["--cv-dir", str(workspace / "CVs"), "--output-dir", str(workspace / "output")],
         env=env,
         cwd=workspace,
     )
@@ -69,7 +98,7 @@ def test_missing_api_key_fails_cleanly(workspace):
 
 @pytest.mark.usefixtures("two_cvs")
 def test_end_to_end_xlsx(workspace, cli_env):
-    out_dir = workspace / "Output"
+    out_dir = workspace / "output"
     result = run_cli(
         [
             "--cv-dir", str(workspace / "CVs"),
@@ -99,11 +128,11 @@ def test_end_to_end_xlsx(workspace, cli_env):
 
 @pytest.mark.usefixtures("two_cvs")
 def test_end_to_end_csv(workspace, cli_env):
-    out_file = workspace / "Output" / "results.csv"
+    out_file = workspace / "output" / "results.csv"
     result = run_cli(
         [
             "--cv-dir", str(workspace / "CVs"),
-            "--output-dir", str(workspace / "Output"),
+            "--output-dir", str(workspace / "output"),
             "--format", "csv",
             "--output-file", "results.csv",
             "--skip-prompts", "--no-cache",
@@ -120,11 +149,11 @@ def test_end_to_end_csv(workspace, cli_env):
 
 @pytest.mark.usefixtures("two_cvs")
 def test_end_to_end_json(workspace, cli_env):
-    out_file = workspace / "Output" / "results.json"
+    out_file = workspace / "output" / "results.json"
     result = run_cli(
         [
             "--cv-dir", str(workspace / "CVs"),
-            "--output-dir", str(workspace / "Output"),
+            "--output-dir", str(workspace / "output"),
             "--format", "json",
             "--output-file", "results.json",
             "--skip-prompts", "--no-cache",
@@ -138,16 +167,60 @@ def test_end_to_end_json(workspace, cli_env):
     assert {row["Full Name"] for row in payload} == {"Alice Example", "Bob Example"}
 
 
+@pytest.mark.usefixtures("two_cvs")
+def test_batch_mode_uses_extract_batch_and_preserves_order(workspace, cli_env):
+    env = cli_env.copy()
+    env["CVSAGENT_FAIL_ON_EXTRACT"] = "1"
+    out_file = workspace / "output" / "ordered.json"
+    result = run_cli(
+        [
+            "--cv-dir", str(workspace / "CVs"),
+            "--output-dir", str(workspace / "output"),
+            "--format", "json",
+            "--output-file", "ordered.json",
+            "--batch-workers", "2",
+            "--skip-prompts", "--no-cache",
+        ],
+        env=env,
+        cwd=workspace,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = json.loads(out_file.read_text(encoding="utf-8"))
+    assert [row["Full Name"] for row in rows] == ["Alice Example", "Bob Example"]
+
+
+@pytest.mark.usefixtures("two_cvs")
+def test_batch_partial_failure_keeps_successful_rows(workspace, cli_env):
+    env = cli_env.copy()
+    env["CVSAGENT_MOCK_BATCH_FAIL_INDEX"] = "1"
+    out_file = workspace / "output" / "partial.json"
+    result = run_cli(
+        [
+            "--cv-dir", str(workspace / "CVs"),
+            "--output-dir", str(workspace / "output"),
+            "--format", "json",
+            "--output-file", "partial.json",
+            "--batch-workers", "2",
+            "--skip-prompts", "--no-cache",
+        ],
+        env=env,
+        cwd=workspace,
+    )
+    assert result.returncode == 3, result.stdout + result.stderr
+    rows = json.loads(out_file.read_text(encoding="utf-8"))
+    assert [row["Full Name"] for row in rows] == ["Alice Example"]
+
+
 # --- Dynamic fields / job description ------------------------------------
 
 
 @pytest.mark.usefixtures("two_cvs")
 def test_custom_fields_end_up_as_columns(workspace, cli_env):
-    out_file = workspace / "Output" / "custom.json"
+    out_file = workspace / "output" / "custom.json"
     result = run_cli(
         [
             "--cv-dir", str(workspace / "CVs"),
-            "--output-dir", str(workspace / "Output"),
+            "--output-dir", str(workspace / "output"),
             "--format", "json",
             "--output-file", "custom.json",
             "--add-fields", "VisaStatus", "DriverLicense",
@@ -167,11 +240,11 @@ def test_job_description_adds_match_columns(workspace, cli_env, tmp_path):
     jd_file = tmp_path / "jd.txt"
     jd_file.write_text("Senior Python Developer with ML experience.", encoding="utf-8")
 
-    out_file = workspace / "Output" / "match.json"
+    out_file = workspace / "output" / "match.json"
     result = run_cli(
         [
             "--cv-dir", str(workspace / "CVs"),
-            "--output-dir", str(workspace / "Output"),
+            "--output-dir", str(workspace / "output"),
             "--format", "json",
             "--output-file", "match.json",
             "--job-description-file", str(jd_file),
@@ -195,7 +268,7 @@ def test_dry_run_does_not_write_output(workspace, cli_env):
     result = run_cli(
         [
             "--cv-dir", str(workspace / "CVs"),
-            "--output-dir", str(workspace / "Output"),
+            "--output-dir", str(workspace / "output"),
             "--dry-run",
             "--skip-prompts",
         ],
@@ -203,9 +276,9 @@ def test_dry_run_does_not_write_output(workspace, cli_env):
         cwd=workspace,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert list((workspace / "Output").glob("*.xlsx")) == []
-    assert list((workspace / "Output").glob("*.csv")) == []
-    assert list((workspace / "Output").glob("*.json")) == []
+    assert list((workspace / "output").glob("*.xlsx")) == []
+    assert list((workspace / "output").glob("*.csv")) == []
+    assert list((workspace / "output").glob("*.json")) == []
     assert "Dry run" in result.stdout
 
 
@@ -213,7 +286,7 @@ def test_empty_cv_dir_returns_nonzero(workspace, cli_env):
     result = run_cli(
         [
             "--cv-dir", str(workspace / "CVs"),
-            "--output-dir", str(workspace / "Output"),
+            "--output-dir", str(workspace / "output"),
             "--skip-prompts", "--no-cache",
         ],
         env=cli_env,
@@ -231,7 +304,7 @@ def test_cache_hits_on_second_run(workspace, cli_env):
     cache_dir = workspace / ".cvsagent_cache"
     base_args = [
         "--cv-dir", str(workspace / "CVs"),
-        "--output-dir", str(workspace / "Output"),
+        "--output-dir", str(workspace / "output"),
         "--cache-dir", str(cache_dir),
         "--format", "json",
         "--skip-prompts",

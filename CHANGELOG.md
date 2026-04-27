@@ -4,7 +4,33 @@ All notable changes to this project will be documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] – 2026-04-21
+## [1.1.0] - 2026-04-27
+
+### Added
+- LangChain-native batch extraction via `Runnable.batch_as_completed()` for
+  uncached CVs, replacing the previous one-by-one extraction loop in batch runs.
+- `--batch-workers` CLI option and `CVSAGENT_BATCH_WORKERS` environment variable
+  to control maximum concurrent LangChain batch extractions.
+- Batch-mode tests covering out-of-order completions, partial failures, and
+  config/env handling for batch workers.
+
+### Changed
+- Batch runs now preserve final report ordering by original sorted filename even
+  when individual LangChain batch items finish out of order.
+- Cache keys now include the extraction request signature, including provider,
+  model, custom fields, job description hash, and cache schema version, so stale
+  results from incompatible settings are not reused.
+- The default output directory is now lowercase `output/` instead of `Output/`.
+  References in docs, tests, Docker config, `.env.example`, and `.gitignore`
+  were updated to match.
+
+### Fixed
+- Batch extraction now records successful partial rows as each item completes and
+  only marks the failed item as failed when one CV fails inside a batch.
+- Lowercase `output/` ignore rules now match the new default directory on
+  case-sensitive filesystems.
+
+## [1.0.0] - 2026-04-21
 
 First open-source release. Everything below is relative to the previous
 pre-release internal version.
@@ -20,7 +46,7 @@ pre-release internal version.
 - Rich progress bar with ETA + stage names.
 - Pre-run token and USD cost estimate (OpenAI only).
 - Interactive PII warning before transmitting CV text to a cloud provider.
-- Partial results are streamed to `Output/.partial.jsonl` so a crash never
+- Partial results are streamed to `output/.partial.jsonl` so a crash never
   discards completed work.
 - Retry with exponential backoff on LLM failures (via `tenacity`).
 - `--dry-run`, `--verbose`, `--log-file`, `--clear-cache`, `--skip-prompts` CLI flags.

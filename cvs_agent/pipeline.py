@@ -9,7 +9,7 @@ Responsibilities:
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from tenacity import (
     retry,
@@ -83,6 +83,27 @@ class CVExtractor:
 
         self.agent = self._build_agent(self.llm, self.schema, job_description)
 
+    @staticmethod
+    def _input_for_text(text: str) -> Dict[str, Any]:
+        return {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"Extract structured information from the following CV:\n\n{text}",
+                }
+            ]
+        }
+
+    @staticmethod
+    def _normalise_result(result: Dict[str, Any]) -> Dict[str, Any]:
+        data = result.get("structured_response")
+        if data is None:
+            raise ExtractionError("Agent returned no structured_response")
+        # LangChain may return a Pydantic model - normalise to dict.
+        if hasattr(data, "model_dump"):
+            data = data.model_dump()
+        return data
+
     # --- LLM + agent construction -----------------------------------------
     @staticmethod
     def _build_llm(
@@ -137,23 +158,7 @@ class CVExtractor:
 
     # --- Extraction -------------------------------------------------------
     def _invoke_once(self, text: str) -> Dict[str, Any]:
-        result = self.agent.invoke(
-            {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": f"Extract structured information from the following CV:\n\n{text}",
-                    }
-                ]
-            }
-        )
-        data = result.get("structured_response")
-        if data is None:
-            raise ExtractionError("Agent returned no structured_response")
-        # LangChain may return a Pydantic model — normalise to dict.
-        if hasattr(data, "model_dump"):
-            data = data.model_dump()
-        return data
+        return self._normalise_result(self.agent.invoke(self._input_for_text(text)))
 
     def extract(self, text: str) -> Dict[str, Any]:
         """Extract structured data from a single CV with retry/backoff."""
@@ -172,6 +177,42 @@ class CVExtractor:
         except Exception as exc:  # noqa: BLE001
             console.error("Pipeline", f"Extraction failed after retries: {exc}")
             return {}
+
+    def extract_batch(
+        self,
+        texts: List[str],
+        max_concurrency: int,
+    ) -> Iterator[Tuple[int, Dict[str, Any]]]:
+        """Extract multiple CVs via LangChain's Runnable batch API.
+
+        Yields ``(input_index, data)`` as each item completes. Failed items are
+        yielded as empty dicts so callers can keep per-CV failure accounting.
+        """
+        if not texts:
+            return
+
+        inputs = [self._input_for_text(text) for text in texts]
+        runnable = self.agent.with_retry(
+            retry_if_exception_type=(Exception,),
+            stop_after_attempt=RETRY_ATTEMPTS,
+        )
+        config = {"max_concurrency": max(1, max_concurrency)}
+
+        for index, result in runnable.batch_as_completed(
+            inputs,
+            config=config,
+            return_exceptions=True,
+        ):
+            if isinstance(result, Exception):
+                console.error("Pipeline", f"Batch extraction failed: {result}")
+                yield index, {}
+                continue
+
+            try:
+                yield index, self._normalise_result(result)
+            except Exception as exc:  # noqa: BLE001
+                console.error("Pipeline", f"Batch extraction returned invalid data: {exc}")
+                yield index, {}
 
     # --- Cost estimation --------------------------------------------------
     def estimate_cost(self, texts: List[str]) -> Optional[Dict[str, float]]:

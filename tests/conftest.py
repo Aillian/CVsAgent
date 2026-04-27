@@ -1,4 +1,4 @@
-"""Shared pytest fixtures — builds throw-away CV files and a clean workspace."""
+﻿"""Shared pytest fixtures â€” builds throw-away CV files and a clean workspace."""
 from __future__ import annotations
 
 import os
@@ -40,9 +40,9 @@ Frontend developer. TypeScript, React, CSS."""
 
 @pytest.fixture()
 def workspace(tmp_path: Path) -> Path:
-    """A tmp workspace with empty CVs/ and Output/ directories."""
+    """A tmp workspace with empty CVs/ and output/ directories."""
     (tmp_path / "CVs").mkdir()
-    (tmp_path / "Output").mkdir()
+    (tmp_path / "output").mkdir()
     return tmp_path
 
 
@@ -91,7 +91,7 @@ def cli_env(monkeypatch: pytest.MonkeyPatch) -> dict:
 def _clean_stray_partials(workspace: Path):
     """Remove incremental partials between tests so assertions stay clean."""
     yield
-    partial = workspace / "Output" / ".partial.jsonl"
+    partial = workspace / "output" / ".partial.jsonl"
     if partial.exists():
         partial.unlink()
     cache = workspace / ".cvsagent_cache"
